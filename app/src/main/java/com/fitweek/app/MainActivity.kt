@@ -1,4 +1,4 @@
-package de.fitweek.app
+package com.fitweek.app
 
 import android.app.Activity
 import android.os.Bundle
