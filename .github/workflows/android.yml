@@ -21,6 +21,8 @@ jobs:
 
       - name: Android SDK einrichten
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - name: Gradle einrichten
         uses: gradle/actions/setup-gradle@v4
