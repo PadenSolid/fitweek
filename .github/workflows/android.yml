@@ -1,0 +1,37 @@
+name: FitWeek Android Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: APK erstellen
+        run: gradle assembleDebug --stacktrace
+
+      - name: APK bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: FitWeek-Android
+          path: app/build/outputs/apk/debug/*.apk
