@@ -7,121 +7,171 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
-import org.json.JSONArray
-import org.json.JSONObject
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import java.time.LocalDate
 import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
-import java.util.UUID
+import org.json.JSONObject
+import org.json.JSONArray
+import kotlin.math.roundToInt
 
-private data class Exercise(val name:String,val sets:Int,val reps:String,val rest:Int,val tip:String)
-private data class Template(val name:String,val category:String,val duration:Int,val rpe:Int,val detail:String,val exercises:List<Exercise> = emptyList())
-private val templates = listOf(
- Template("Kraft A – Oberkörper","Kraft",55,7,"1–3 Wiederholungen in Reserve. Saubere Technik vor Steigerung.",listOf(
-  Exercise("Klimmzüge",4,"1–2",150,"Wenn nötig Bandunterstützung nutzen"),Exercise("TRX Rudern",3,"8–12",90,"Schwierigkeit über Körperwinkel"),Exercise("Liegestütze",3,"8–10",90,"Nicht bis zum Muskelversagen"),Exercise("TRX Chest Press",3,"8–12",90,"Körperwinkel progressiv steigern"),Exercise("Band Face Pull",3,"12–15",60,"Schulterblätter kontrolliert bewegen"))),
- Template("Kraft B – Beine & Rumpf","Kraft",50,7,"Beinübungen kontrolliert; 1–3 Wiederholungen in Reserve.",listOf(
-  Exercise("Bulgarian Split Squat",3,"8–12 je Bein",120,"Langsame exzentrische Phase"),Exercise("TRX Hamstring Curl",3,"8–12",90,"Becken oben halten"),Exercise("Ausfallschritte",3,"10 je Bein",90,"Optional Bandwiderstand"),Exercise("Wadenheben",3,"12–20",60,"Volle Bewegungsamplitude"),Exercise("Side Plank",3,"30–45 s je Seite",60,"Rumpf stabil"))),
- Template("Kraft C – Ganzkörper","Kraft",55,7,"Alternative Reize; Fortschritt nach tatsächlicher Leistung.",listOf(
-  Exercise("Bandunterstützte Klimmzüge",3,"6–10",120,"Unterstützung schrittweise reduzieren"),Exercise("TRX Rudern",3,"8–12",90,"Schwieriger als bei Kraft A wenn möglich"),Exercise("Band Schulterdrücken",3,"8–12",90,"Widerstand passend wählen"),Exercise("TRX Squat",3,"10–15",90,"Bei Bedarf mit Band erschweren"),Exercise("Dead Bug",3,"10 je Seite",60,"Langsam und kontrolliert"))),
- Template("Rudern – Grundlage","Rudern",45,4,"10 Min. locker, 30 Min. gleichmäßig RPE 4–5, 5 Min. locker"),
- Template("Rudern – Intervalle","Rudern",45,8,"10 Min. einrudern; 5 × 4 Min. RPE 8 mit 2 Min. locker dazwischen; 7 Min. ausrudern"),
- Template("Rudern – Tempo","Rudern",40,7,"10 Min. locker, 3 × 7 Min. RPE 7 mit je 2 Min. locker, 5 Min. ausrudern"),
- Template("Joggen – Grundlage","Laufen",35,4,"5 Min. locker, 25 Min. RPE 4–5, 5 Min. locker"),
- Template("Aktive Erholung","Regeneration",25,2,"Spaziergang oder lockere Mobilität; keine harte Belastung")
+private data class Move(val name:String,val sets:Int,val reps:String,val rest:Int,val cue:String)
+private data class Workout(val title:String,val duration:Int,val detail:String,val moves:List<Move> = emptyList())
+private data class Ingredient(val name:String,val grams:Int)
+private data class Recipe(val title:String,val minutes:Int,val ingredients:List<Ingredient>,val directions:String)
+// Approximate per-100g nutrient values for the stated raw/dry food; values vary by brand and preparation.
+// kcal, protein, carbohydrate, fat, fibre, calcium mg, magnesium mg, iron mg, vitamin C mg.
+private data class Nutrients(val kcal:Double,val p:Double,val c:Double,val f:Double,val fibre:Double,val ca:Double,val mg:Double,val fe:Double,val vitC:Double)
+private val nutrition=mapOf(
+ "Magerquark" to Nutrients(67.0,12.0,4.0,0.2,0.0,90.0,11.0,0.3,0.0),
+ "Haferflocken" to Nutrients(372.0,13.5,59.0,7.0,10.0,54.0,130.0,4.4,0.0),
+ "Heidelbeeren" to Nutrients(57.0,0.7,12.0,0.3,2.4,6.0,6.0,0.3,9.7),
+ "Walnüsse" to Nutrients(654.0,15.0,7.0,65.0,6.7,98.0,158.0,2.9,1.3),
+ "Banane" to Nutrients(89.0,1.1,20.0,0.3,2.6,5.0,27.0,0.3,8.7),
+ "Hüttenkäse" to Nutrients(98.0,12.0,3.0,4.0,0.0,83.0,8.0,0.1,0.0),
+ "Harzer Käse" to Nutrients(126.0,30.0,0.0,0.5,0.0,125.0,20.0,0.4,0.0),
+ "Ei" to Nutrients(143.0,12.6,0.7,9.5,0.0,56.0,12.0,1.8,0.0),
+ "Vollkornbrot" to Nutrients(230.0,8.0,40.0,2.0,7.0,70.0,80.0,2.5,0.0),
+ "Tomaten" to Nutrients(18.0,0.9,2.6,0.2,1.2,10.0,11.0,0.3,14.0),
+ "Gurke" to Nutrients(12.0,0.6,1.8,0.1,0.5,16.0,13.0,0.3,2.8),
+ "Paprika rot" to Nutrients(31.0,1.0,6.0,0.3,2.1,7.0,12.0,0.4,127.0),
+ "Brokkoli" to Nutrients(34.0,2.8,4.0,0.4,2.6,47.0,21.0,0.7,89.0),
+ "Spinat" to Nutrients(23.0,2.9,1.4,0.4,2.2,99.0,79.0,2.7,28.0),
+ "Karotten" to Nutrients(41.0,0.9,7.0,0.2,2.8,33.0,12.0,0.3,5.9),
+ "Kartoffeln" to Nutrients(77.0,2.0,17.0,0.1,2.2,12.0,23.0,0.8,20.0),
+ "Reis trocken" to Nutrients(350.0,7.0,77.0,0.6,1.3,10.0,35.0,0.8,0.0),
+ "Vollkornnudeln trocken" to Nutrients(350.0,13.0,65.0,2.5,8.0,21.0,110.0,3.0,0.0),
+ "Hähnchenbrust roh" to Nutrients(110.0,23.0,0.0,1.5,0.0,5.0,29.0,0.4,0.0),
+ "Lachs roh" to Nutrients(208.0,20.0,0.0,13.0,0.0,9.0,27.0,0.3,0.0),
+ "Tofu natur" to Nutrients(125.0,13.0,2.0,7.0,1.0,200.0,35.0,2.7,0.0),
+ "Kichererbsen gekocht" to Nutrients(164.0,8.9,20.0,2.6,7.6,49.0,48.0,2.9,1.3),
+ "Linsen gekocht" to Nutrients(116.0,9.0,20.0,0.4,7.9,19.0,36.0,3.3,1.5),
+ "Olivenöl" to Nutrients(884.0,0.0,0.0,100.0,0.0,0.0,0.0,0.0,0.0),
+ "Milch 1,5 %" to Nutrients(47.0,3.4,4.9,1.5,0.0,120.0,11.0,0.1,0.0),
+ "Apfel" to Nutrients(52.0,0.3,12.0,0.2,2.4,6.0,5.0,0.1,4.6)
 )
-private fun JSONObject.str(k:String,d:String="") = optString(k,d)
-private fun initialSessions():JSONArray { val a=JSONArray(); listOf(0 to 0,0 to 3,1 to 4,3 to 1,4 to 6,5 to 2,5 to 3).forEach { (day,index) -> a.put(session(templates[index],LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).plusDays(day.toLong()).toString())) };return a }
-private fun session(t:Template,date:String):JSONObject = JSONObject().apply {put("id",UUID.randomUUID().toString());put("date",date);put("name",t.name);put("category",t.category);put("duration",t.duration);put("rpe",t.rpe);put("detail",t.detail);put("done",false);put("actualMinutes","");put("actualRpe","");val ex=JSONArray();t.exercises.forEach { e->ex.put(JSONObject().apply {put("name",e.name);put("sets",e.sets);put("reps",e.reps);put("rest",e.rest);put("tip",e.tip);put("actual","")}) };put("exercises",ex) }
-private data class Food(val name:String,val kcal:Double,val protein:Double,val carbs:Double,val fat:Double)
-private val foods=listOf(Food("Magerquark",67.0,12.0,4.0,0.2),Food("Haferflocken",372.0,13.5,59.0,7.0),Food("Heidelbeeren",57.0,0.7,12.0,0.3),Food("Walnüsse",654.0,15.0,7.0,65.0),Food("Hüttenkäse",98.0,12.0,3.0,4.0),Food("Harzer Käse",126.0,30.0,0.0,0.5),Food("Ei",143.0,12.6,0.7,9.5),Food("Banane",89.0,1.1,20.0,0.3),Food("Kartoffeln",77.0,2.0,17.0,0.1),Food("Brokkoli",34.0,2.8,4.0,0.4),Food("Hähnchenbrust roh",110.0,23.0,0.0,1.5),Food("Reis trocken",350.0,7.0,77.0,0.6),Food("Olivenöl",884.0,0.0,0.0,100.0))
-private fun meal(date:String,name:String,ingredients:List<Pair<Int,Int>>):JSONObject=JSONObject().apply {put("id",UUID.randomUUID().toString());put("date",date);put("name",name);put("eaten",false);val a=JSONArray();ingredients.forEach{(i,g)->a.put(JSONObject().apply{put("food",i);put("grams",g)})};put("ingredients",a)}
-private fun mealTotals(m:JSONObject):List<Double>{val a=m.optJSONArray("ingredients")?:JSONArray();val totals=MutableList(4){0.0};for(i in 0 until a.length()){val x=a.getJSONObject(i);val f=foods.getOrNull(x.optInt("food"))?:continue;val q=x.optDouble("grams",0.0)/100;listOf(f.kcal,f.protein,f.carbs,f.fat).forEachIndexed{j,v->totals[j]+=v*q}};return totals}
-class MainActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent { MaterialTheme { FitWeekApp() } }}}
+private val breakfasts=listOf(
+ Recipe("Quark-Bowl mit Haferflocken",5,listOf(Ingredient("Magerquark",300),Ingredient("Haferflocken",75),Ingredient("Heidelbeeren",120),Ingredient("Walnüsse",20)),"Alles in einer Schüssel mischen."),
+ Recipe("Hüttenkäse-Brot und Ei",10,listOf(Ingredient("Hüttenkäse",250),Ingredient("Vollkornbrot",120),Ingredient("Ei",110),Ingredient("Tomaten",150)),"Eier kochen, Brot mit Hüttenkäse und Tomaten servieren."),
+ Recipe("Quark mit Banane und Hafer",5,listOf(Ingredient("Magerquark",300),Ingredient("Haferflocken",70),Ingredient("Banane",130),Ingredient("Walnüsse",15)),"Banane schneiden und alles vermischen.")
+)
+private val lunches=listOf(
+ Recipe("Hähnchen-Reis-Brokkoli",20,listOf(Ingredient("Hähnchenbrust roh",200),Ingredient("Reis trocken",100),Ingredient("Brokkoli",250),Ingredient("Olivenöl",15)),"Reis kochen; Hähnchen durchgaren; Brokkoli dünsten, Öl ergänzen."),
+ Recipe("Linsen-Kartoffel-Pfanne",20,listOf(Ingredient("Linsen gekocht",250),Ingredient("Kartoffeln",300),Ingredient("Paprika rot",150),Ingredient("Olivenöl",15)),"Kartoffeln klein schneiden und garen, mit Linsen und Paprika anbraten."),
+ Recipe("Tofu-Vollkornnudeln",20,listOf(Ingredient("Tofu natur",220),Ingredient("Vollkornnudeln trocken",110),Ingredient("Spinat",150),Ingredient("Olivenöl",12)),"Nudeln kochen, Tofu anbraten und Spinat kurz garen."),
+ Recipe("Lachs mit Kartoffeln",20,listOf(Ingredient("Lachs roh",180),Ingredient("Kartoffeln",350),Ingredient("Brokkoli",250),Ingredient("Olivenöl",10)),"Kartoffeln und Brokkoli garen, Lachs vollständig durchgaren.")
+)
+private val dinners=listOf(
+ Recipe("Harzer Brotzeit",8,listOf(Ingredient("Harzer Käse",150),Ingredient("Vollkornbrot",140),Ingredient("Tomaten",200),Ingredient("Gurke",150),Ingredient("Olivenöl",10)),"Gemüse schneiden und mit Käse und Brot servieren."),
+ Recipe("Hüttenkäse-Kichererbsen-Salat",10,listOf(Ingredient("Hüttenkäse",250),Ingredient("Kichererbsen gekocht",200),Ingredient("Paprika rot",150),Ingredient("Gurke",150),Ingredient("Olivenöl",10)),"Abgetropfte Kichererbsen mit den übrigen Zutaten vermischen."),
+ Recipe("Eier mit Kartoffeln und Spinat",15,listOf(Ingredient("Ei",165),Ingredient("Kartoffeln",300),Ingredient("Spinat",200),Ingredient("Olivenöl",10)),"Kartoffeln vorkochen oder klein schneiden, mit Eiern und Spinat fertig garen.")
+)
+private val snacks=listOf(
+ Recipe("Quark und Apfel",3,listOf(Ingredient("Magerquark",200),Ingredient("Apfel",180)),"Apfel schneiden, dazu Quark."),
+ Recipe("Hüttenkäse und Banane",3,listOf(Ingredient("Hüttenkäse",200),Ingredient("Banane",130)),"Zusammen servieren."),
+ Recipe("Quark und Walnüsse",3,listOf(Ingredient("Magerquark",200),Ingredient("Walnüsse",20)),"Vermischen.")
+)
+private fun strength(kind:Int,week:Int):Workout {
+ val block=(week-1)/4; val deload=week%4==0
+ val sets=if(deload)2 else 3+if(block>=2)1 else 0
+ val reps=if(deload)"6–8, locker" else when(block){0->"8–10";1->"9–12";else->"10–12"}
+ fun m(n:String,s:Int=sets,r:String=reps,rest:Int=90,cue:String="2 Wiederholungen in Reserve; kontrollierte Technik")=Move(n,s,r,rest,cue)
+ val moves=when(kind){
+ 0->listOf(m("Klimmzüge",if(deload)2 else 4,if(deload)"1" else if(block==0)"1–2" else "2–3 (ggf. Band)",150,"Bei Bedarf Bandunterstützung; nicht bis zum Versagen"),m("TRX Rudern"),m("Liegestütze",r=if(deload)"6–8" else "8–12"),m("TRX Chest Press"),m("Band Face Pull",r="12–15"))
+ 1->listOf(m("Bulgarian Split Squat",r="8–12 je Bein",rest=120),m("TRX Hamstring Curl"),m("Ausfallschritte",r="10 je Bein"),m("Wadenheben",r="12–20"),m("Side Plank",r="30–45 Sekunden je Seite"))
+ else->listOf(m("Bandunterstützte Klimmzüge",r="6–10",rest=120),m("TRX Rudern"),m("Band Schulterdrücken"),m("TRX Squat",r="10–15"),m("Dead Bug",r="10 je Seite"))
+ }
+ return Workout(listOf("Kraft A · Oberkörper","Kraft B · Beine","Kraft C · Ganzkörper")[kind],if(deload)35 else 50+block*5,if(deload)"Entlastungswoche: bewusst weniger Umfang." else "Trainingsblock ${block+1}: Übungen sauber ausführen. Bei erfülltem Zielbereich in der nächsten Belastungsphase schwierigere Variante oder stärkeres Band.",moves)
+}
+private fun training(week:Int,day:Int):List<Workout>{
+ val deload=week%4==0;val block=(week-1)/4;val extra=if(deload)0 else block*3
+ return when(day){
+ 0->listOf(strength(0,week))
+ 1->listOf(Workout("Rudern · Intervalle",if(deload)30 else 40+extra,if(deload)"10 Min. locker · 4 × 2 Min. moderat, 2 Min. locker · 6 Min. ausrudern" else "10 Min. locker · ${4+block} × 4 Min. zügig (RPE 7–8), jeweils 2 Min. locker · 6 Min. ausrudern"))
+ 3->listOf(strength(1,week),Workout("Joggen · locker",if(deload)20 else 25+extra,"Gesprächstempo (RPE 3–4), hügelige Abschnitte ggf. gehen."))
+ 4->listOf(strength(2,week))
+ 5->listOf(Workout("Rudern · Grundlage",if(deload)30 else 40+week*2,"Gleichmäßig locker bis moderat (RPE 4–5), 5 Min. ein- und ausrudern."))
+ else->emptyList()
+ }
+}
+private fun recipes(day:Int):List<Recipe> = listOf(breakfasts[day%breakfasts.size],lunches[day%lunches.size],dinners[day%dinners.size],snacks[day%snacks.size])
+private fun sums(recipe:Recipe):DoubleArray {val a=DoubleArray(9);recipe.ingredients.forEach {i->val n=nutrition[i.name]?:return@forEach;val q=i.grams/100.0;val v=doubleArrayOf(n.kcal,n.p,n.c,n.f,n.fibre,n.ca,n.mg,n.fe,n.vitC);v.indices.forEach{j->a[j]+=v[j]*q}};return a}
+private fun fmt(d:Double)=String.format(java.util.Locale.GERMANY,"%.1f",d)
+private fun key(date:LocalDate,index:Int)="${date}_$index"
+private fun mondayNow()=LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+
+class MainActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent {MaterialTheme {FitWeekScreen()}}}}
+
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun FitWeekApp(){
- val ctx=androidx.compose.ui.platform.LocalContext.current
- val prefs=remember{ctx.getSharedPreferences("fitweek_v2",Context.MODE_PRIVATE)}
- var sessions by remember { mutableStateOf(try {JSONArray(prefs.getString("sessions",null)?:initialSessions().toString())}catch(_:Exception){initialSessions()}) }
- var meals by remember { mutableStateOf(try{JSONArray(prefs.getString("meals","[]"))}catch(_:Exception){JSONArray()}) }
- var weight by remember{mutableStateOf(prefs.getString("weight","77.5")?:"77.5")}
- var goal by remember{mutableStateOf(prefs.getString("goal","74")?:"74")}
- var monday by remember{mutableStateOf(LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))}
+@Composable private fun FitWeekScreen(){
+ val context=androidx.compose.ui.platform.LocalContext.current
+ val prefs=remember {context.getSharedPreferences("fitweek_v3",Context.MODE_PRIVATE)}
+ var start by remember {mutableStateOf(prefs.getString("start",mondayNow().toString())?:mondayNow().toString())}
+ val startDate=remember(start){runCatching{LocalDate.parse(start)}.getOrDefault(mondayNow())}
+ var offset by remember{mutableIntStateOf(0)}
  var tab by remember{mutableIntStateOf(0)}
- var editing by remember{mutableStateOf<String?>(null)}
- var editingMeal by remember{mutableStateOf<String?>(null)}
- fun saveSessions(a:JSONArray){sessions=JSONArray(a.toString());prefs.edit().putString("sessions",sessions.toString()).apply()}
- fun saveMeals(a:JSONArray){meals=JSONArray(a.toString());prefs.edit().putString("meals",meals.toString()).apply()}
- fun modifySession(id:String,change:(JSONObject)->Unit){val a=JSONArray(sessions.toString());for(i in 0 until a.length()){val o=a.getJSONObject(i);if(o.str("id")==id){change(o);break}};saveSessions(a)}
- fun modifyMeal(id:String,change:(JSONObject)->Unit){val a=JSONArray(meals.toString());for(i in 0 until a.length()){val o=a.getJSONObject(i);if(o.str("id")==id){change(o);break}};saveMeals(a)}
- val selectedSession=(0 until sessions.length()).map{sessions.getJSONObject(it)}.firstOrNull{it.str("id")==editing}
- val selectedMeal=(0 until meals.length()).map{meals.getJSONObject(it)}.firstOrNull{it.str("id")==editingMeal}
- Scaffold(topBar={TopAppBar(title={Text(if(editing!=null)"Training bearbeiten" else if(editingMeal!=null)"Mahlzeit bearbeiten" else "FitWeek · Version 2")})},bottomBar={if(editing==null&&editingMeal==null) NavigationBar {listOf("Woche","Ernährung","Fortschritt").forEachIndexed{i,s->NavigationBarItem(selected=tab==i,onClick={tab=i},icon={Text(listOf("▦","◉","↗")[i])},label={Text(s)})}}}) { padding ->
- Column(Modifier.fillMaxSize().padding(padding).padding(horizontal=14.dp)) {
- if(selectedSession!=null){
-  val id=selectedSession.str("id")
-  var name by remember(id){mutableStateOf(selectedSession.str("name"))}
-  var duration by remember(id){mutableStateOf(selectedSession.optInt("duration").toString())}
-  var intensity by remember(id){mutableStateOf(selectedSession.optInt("rpe").toString())}
-  var detail by remember(id){mutableStateOf(selectedSession.str("detail"))}
-  var actualMinutes by remember(id){mutableStateOf(selectedSession.str("actualMinutes"))}
-  var actualRpe by remember(id){mutableStateOf(selectedSession.str("actualRpe"))}
-  val ex=selectedSession.optJSONArray("exercises")?:JSONArray()
-  Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
-   TextButton(onClick={editing=null}){Text("← Zurück")}
-   OutlinedTextField(name,{name=it},label={Text("Training")},modifier=Modifier.fillMaxWidth())
-   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(duration,{duration=it},label={Text("Dauer (Min.)")},modifier=Modifier.weight(1f),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number));OutlinedTextField(intensity,{intensity=it},label={Text("Ziel-RPE 1–10")},modifier=Modifier.weight(1f),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))}
-   OutlinedTextField(detail,{detail=it},label={Text("Trainingsablauf / Intensität")},modifier=Modifier.fillMaxWidth(),minLines=3)
-   Button(onClick={modifySession(id){it.put("name",name);it.put("duration",duration.toIntOrNull()?.coerceAtLeast(1)?:45);it.put("rpe",intensity.toIntOrNull()?.coerceIn(1,10)?:5);it.put("detail",detail)};editing=null}){Text("Plan speichern")}
-   if(ex.length()>0){Text("Übungen & tatsächliche Leistung",style=MaterialTheme.typography.titleMedium)
-    for(i in 0 until ex.length()){val e=ex.getJSONObject(i);val n=e.str("name");var actual by remember(id,i){mutableStateOf(e.str("actual"))};Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(n,fontWeight=FontWeight.Bold);Text("${e.optInt("sets")} Sätze × ${e.str("reps")} · Pause ${e.optInt("rest")} s");Text(e.str("tip"),style=MaterialTheme.typography.bodySmall);OutlinedTextField(actual,{actual=it;modifySession(id){s->s.getJSONArray("exercises").getJSONObject(i).put("actual",actual)}},label={Text("Ist: z. B. 8/8/7, Band leicht")},modifier=Modifier.fillMaxWidth())}}}
-   }
-   Text("Trainingsprotokoll",style=MaterialTheme.typography.titleMedium)
-   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(actualMinutes,{actualMinutes=it},label={Text("Ist-Minuten")},modifier=Modifier.weight(1f),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number));OutlinedTextField(actualRpe,{actualRpe=it},label={Text("Ist-RPE")},modifier=Modifier.weight(1f),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))}
-   Button(onClick={modifySession(id){it.put("actualMinutes",actualMinutes);it.put("actualRpe",actualRpe);it.put("done",true)};editing=null}){Text("Als absolviert speichern")}
-   OutlinedButton(onClick={modifySession(id){it.put("done",false)};editing=null}){Text("Als nicht absolviert markieren")}
-   Text("Progression: Zielbereich erreichen, Technik und Wiederholungsreserve prüfen; erst danach Schwierigkeit erhöhen. Die App speichert die Ist-Leistung. Eine automatische Anpassung folgt in einem weiteren Ausbau.",style=MaterialTheme.typography.bodySmall)
-  }
- }else if(selectedMeal!=null){
-  val id=selectedMeal.str("id");var title by remember(id){mutableStateOf(selectedMeal.str("name"))}
-  Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
-   TextButton(onClick={editingMeal=null}){Text("← Zurück")};OutlinedTextField(title,{title=it;modifyMeal(id){o->o.put("name",title)}},label={Text("Mahlzeit")},modifier=Modifier.fillMaxWidth())
-   val arr=selectedMeal.optJSONArray("ingredients")?:JSONArray()
-   for(i in 0 until arr.length()){val ing=arr.getJSONObject(i);val fi=ing.optInt("food");var grams by remember(id,i){mutableStateOf(ing.optInt("grams").toString())};Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Text(foods[fi].name,Modifier.weight(1f).padding(top=15.dp));OutlinedTextField(grams,{grams=it;modifyMeal(id){o->o.getJSONArray("ingredients").getJSONObject(i).put("grams",grams.toIntOrNull()?.coerceAtLeast(0)?:0)}},label={Text("Gramm")},modifier=Modifier.width(125.dp),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number));TextButton(onClick={modifyMeal(id){o->val old=o.getJSONArray("ingredients");val next=JSONArray();for(j in 0 until old.length())if(j!=i)next.put(old.getJSONObject(j));o.put("ingredients",next)}}){Text("×")}}}
-   var chosen by remember(id){mutableIntStateOf(0)};var expanded by remember{mutableStateOf(false)}
-   ExposedDropdownMenuBox(expanded=expanded,onExpandedChange={expanded=it}){OutlinedTextField(foods[chosen].name,{},readOnly=true,label={Text("Lebensmittel hinzufügen")},trailingIcon={ExposedDropdownMenuDefaults.TrailingIcon(expanded)},modifier=Modifier.menuAnchor().fillMaxWidth());ExposedDropdownMenu(expanded=expanded,onDismissRequest={expanded=false}){foods.forEachIndexed{i,f->DropdownMenuItem(text={Text(f.name)},onClick={chosen=i;expanded=false})}}}
-   Button(onClick={modifyMeal(id){it.getJSONArray("ingredients").put(JSONObject().apply{put("food",chosen);put("grams",100)})}}){Text("100 g hinzufügen (Menge anschließend ändern)")}
-   val totals=mealTotals(selectedMeal);Text("${totals[0].toInt()} kcal · ${"%.1f".format(totals[1])} g Protein · ${"%.1f".format(totals[2])} g KH · ${"%.1f".format(totals[3])} g Fett")
-   Button(onClick={modifyMeal(id){it.put("eaten",!it.optBoolean("eaten"))};editingMeal=null}){Text(if(selectedMeal.optBoolean("eaten"))"Als nicht gegessen markieren" else "Als gegessen markieren")}
-   Text("Nährwerte aus hinterlegten Durchschnittswerten pro 100 g; Produktangaben können abweichen.",style=MaterialTheme.typography.bodySmall)
-  }
- }else if(tab==0){
-  Row(horizontalArrangement=Arrangement.SpaceBetween,modifier=Modifier.fillMaxWidth()){TextButton(onClick={monday=monday.minusWeeks(1)}){Text("← Woche")};Text("${monday} – ${monday.plusDays(6)}",modifier=Modifier.padding(top=12.dp));TextButton(onClick={monday=monday.plusWeeks(1)}){Text("Woche →")}}
-  LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)) {items((0..6).toList()){d->val date=monday.plusDays(d.toLong()).toString();val list=(0 until sessions.length()).map{sessions.getJSONObject(it)}.filter{it.str("date")==date};Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){Text("${listOf("Mo","Di","Mi","Do","Fr","Sa","So")[d]} · $date",fontWeight=FontWeight.Bold);if(list.isEmpty())Text("Noch kein Training");list.forEach{s->Row{Column(Modifier.weight(1f)){Text(s.str("name"),fontWeight=FontWeight.SemiBold);Text("${s.optInt("duration")} Min. · RPE ${s.optInt("rpe")} · ${if(s.optBoolean("done"))"Absolviert ✓" else "Geplant"}",style=MaterialTheme.typography.bodySmall)};TextButton(onClick={editing=s.str("id")}){Text("Details")};TextButton(onClick={val a=JSONArray();for(i in 0 until sessions.length())if(sessions.getJSONObject(i).str("id")!=s.str("id"))a.put(sessions.getJSONObject(i));saveSessions(a)}){Text("×")}}};var expanded by remember(date){mutableStateOf(false)};var selectedTemplate by remember(date){mutableIntStateOf(0)};ExposedDropdownMenuBox(expanded=expanded,onExpandedChange={expanded=it}){OutlinedTextField(templates[selectedTemplate].name,{},readOnly=true,label={Text("Training auswählen")},trailingIcon={ExposedDropdownMenuDefaults.TrailingIcon(expanded)},modifier=Modifier.menuAnchor().fillMaxWidth());ExposedDropdownMenu(expanded=expanded,onDismissRequest={expanded=false}){templates.forEachIndexed{i,t->DropdownMenuItem(text={Text(t.name)},onClick={selectedTemplate=i;expanded=false})}}};OutlinedButton(onClick={val a=JSONArray(sessions.toString());a.put(session(templates[selectedTemplate],date));saveSessions(a)}){Text("+ Training hinzufügen")}}}}}
- }else if(tab==1){
-  Text("Ernährungsplan mit Grammangaben",style=MaterialTheme.typography.titleMedium)
-  Text("Nur als gegessen markierte Mahlzeiten zählen zur Ist-Aufnahme.",style=MaterialTheme.typography.bodySmall)
-  LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items((0..6).toList()){d->val date=monday.plusDays(d.toLong()).toString();val dayMeals=(0 until meals.length()).map{meals.getJSONObject(it)}.filter{it.str("date")==date};val eaten=dayMeals.filter{it.optBoolean("eaten")};val energy=eaten.sumOf{mealTotals(it)[0]};val protein=eaten.sumOf{mealTotals(it)[1]};Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(date,fontWeight=FontWeight.Bold);Text("Gegessen: ${energy.toInt()} kcal · ${protein.toInt()} g Protein");dayMeals.forEach{m->Row{Text("${if(m.optBoolean("eaten"))"✓ " else "○ "}${m.str("name")} · ${mealTotals(m)[0].toInt()} kcal",Modifier.weight(1f));TextButton(onClick={editingMeal=m.str("id")}){Text("Edit")};TextButton(onClick={val a=JSONArray();for(i in 0 until meals.length())if(meals.getJSONObject(i).str("id")!=m.str("id"))a.put(meals.getJSONObject(i));saveMeals(a)}){Text("×")}}};OutlinedButton(onClick={val a=JSONArray(meals.toString());a.put(meal(date,"Quark-Frühstück",listOf(0 to 250,1 to 60,2 to 100,3 to 15)));saveMeals(a)}){Text("+ Quark-Frühstück")};OutlinedButton(onClick={val a=JSONArray(meals.toString());a.put(meal(date,"Neue Mahlzeit",listOf(4 to 200)));saveMeals(a)}){Text("+ Eigene Mahlzeit")}}}}}
- }else{
-  Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){
-   Text("Ziele & Fortschritt",style=MaterialTheme.typography.titleMedium)
-   OutlinedTextField(weight,{weight=it;prefs.edit().putString("weight",it).apply()},label={Text("Aktuelles Gewicht (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
-   OutlinedTextField(goal,{goal=it;prefs.edit().putString("goal",it).apply()},label={Text("Zielgewicht (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
-   val completed=(0 until sessions.length()).count{sessions.getJSONObject(it).optBoolean("done")};val planned=sessions.length();Text("Trainingseinheiten absolviert: $completed von $planned")
-   Text("Kraftziele: 3 Klimmzüge → 6–8; 15 Liegestütze → schwierigere Varianten.")
-   Text("Protein-Orientierung: 125–170 g/Tag bei 77,5 kg. Individuelle Kalorienziele benötigen Alter, Geschlecht, Aktivität und eine Verlaufskontrolle.")
-   Text("Trainingskalorien werden derzeit bewusst nicht berechnet: RPE und Dauer allein liefern keine verlässliche individuelle Energiemessung.",style=MaterialTheme.typography.bodySmall)
-   Text("Alle Daten werden lokal auf diesem Gerät gespeichert. Kein Cloud-Sync in dieser Version.",style=MaterialTheme.typography.bodySmall)
-  }
+ var weight by remember{mutableStateOf(prefs.getString("weight","77.5")?:"77.5")}
+ var revision by remember{mutableIntStateOf(0)}
+ var selected by remember{mutableStateOf<LocalDate?>(null)}
+ var expandedRecipe by remember{mutableStateOf<String?>(null)}
+ val week=offset+1
+ fun flag(k:String)=prefs.getBoolean(k,false)
+ fun flip(k:String){prefs.edit().putBoolean(k,!flag(k)).apply();revision++}
+ fun dateDay(d:Int)=startDate.plusDays(offset*7L+d)
+ val today=LocalDate.now()
+ val dayIndex=((today.toEpochDay()-startDate.toEpochDay()).toInt()).coerceIn(0,83)
+ val displayDay=selected?:if(tab==0)today else dateDay(0)
+ val actualDay=if(displayDay.isBefore(startDate))startDate else displayDay
+ val relative=((actualDay.toEpochDay()-startDate.toEpochDay()).toInt()).coerceIn(0,83)
+ val selectedWeek=relative/7+1
+ val day=relative%7
+ val workouts=training(selectedWeek,day)
+ val dayRecipes=recipes(relative)
+ val dayTotals=DoubleArray(9);dayRecipes.forEach{r->val v=sums(r);v.indices.forEach{i->dayTotals[i]+=v[i]}}
+ Scaffold(topBar={TopAppBar(title={Text("FitWeek · 12-Wochen-Coach")})},bottomBar={NavigationBar {listOf("Heute","12 Wochen","Ernährung","Profil").forEachIndexed{i,label->NavigationBarItem(selected=tab==i,onClick={tab=i;selected=null},icon={Text(listOf("●","▦","◉","⚙")[i])},label={Text(label)})}}}){padding->
+ LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal=14.dp),verticalArrangement=Arrangement.spacedBy(10.dp),contentPadding=PaddingValues(vertical=12.dp)) {
+ when(tab){
+ 0->{
+ item{Text("Heute · $today",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)}
+ item{Text(if(today.isBefore(startDate)||today.isAfter(startDate.plusDays(83)))"Außerhalb des aktuellen 12-Wochen-Blocks. Über den Wochenplan kannst du die Einheiten ansehen." else "Trainingswoche $selectedWeek von 12 · Konkrete Vorgaben statt Protokollpflicht")}
+ item{Text("Training",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
+ if(workouts.isEmpty())item{Text("Ruhetag – Regeneration und lockere Bewegung.")} else items(workouts){w->WorkoutCard(w,flag("w_${actualDay}_${w.title}"),{flip("w_${actualDay}_${w.title}")})}
+ item{Text("Mahlzeiten · geplant ${dayTotals[0].roundToInt()} kcal · ${fmt(dayTotals[1])} g Protein",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
+ items(dayRecipes){r->RecipeCard(r,flag("m_${actualDay}_${r.title}"),{flip("m_${actualDay}_${r.title}")},expandedRecipe==r.title,{expandedRecipe=if(expandedRecipe==r.title)null else r.title})}
+ }
+ 1->{
+ item{Text("12-Wochen-Trainingsplan",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)}
+ item{Text("3 Kraftschwerpunkte, Intervallrudern, Grundlagenrudern und lockeres Laufen auf fünf Trainingstage verteilt. Wochen 4, 8 und 12 sind reduziert.")}
+ item{Row(horizontalArrangement=Arrangement.SpaceBetween,modifier=Modifier.fillMaxWidth()){OutlinedButton(onClick={offset=(offset-1).coerceAtLeast(0)}){Text("← Vorherige")};Text("Woche $week/12",modifier=Modifier.padding(top=14.dp));OutlinedButton(onClick={offset=(offset+1).coerceAtMost(11)}){Text("Nächste →")}}}
+ items((0..6).toList()){d->val date=dateDay(d);val ws=training(week,d);Card(Modifier.fillMaxWidth(),onClick={selected=date;tab=0}){Column(Modifier.padding(12.dp)){Text("${listOf("Mo","Di","Mi","Do","Fr","Sa","So")[d]} · $date",fontWeight=FontWeight.Bold);Text(if(ws.isEmpty())"Ruhetag" else ws.joinToString(" + "){it.title});ws.forEach{w->Text("${w.duration} Min. · ${if(flag("w_${date}_${w.title}"))"✓ absolviert" else "geplant"}",style=MaterialTheme.typography.bodySmall)};Text("Antippen für Tagesdetails",style=MaterialTheme.typography.labelSmall)}}}
+ item{Text("Trainingssteigerungen sind geplante Vorgaben, keine gemessenen Leistungsverbesserungen. Bei Beschwerden, Erschöpfung oder nicht bewältigbaren Vorgaben Belastung reduzieren.",style=MaterialTheme.typography.bodySmall)}
+ }
+ 2->{
+ item{Text("Ernährungsplan",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)}
+ item{Text("Sieben-Tage-Rezeptzyklus für 12 Wochen · jede Zutat in Gramm · ungefähr 30 Minuten aktive Küchenzeit pro Tag durch Vorkochen von Reis/Kartoffeln.")}
+ item{Row(horizontalArrangement=Arrangement.SpaceBetween,modifier=Modifier.fillMaxWidth()){OutlinedButton(onClick={offset=(offset-1).coerceAtLeast(0)}){Text("← Woche")};Text("Woche $week",modifier=Modifier.padding(top=12.dp));OutlinedButton(onClick={offset=(offset+1).coerceAtMost(11)}){Text("Woche →")}}}
+ items((0..6).toList()){d->val date=dateDay(d);val rs=recipes(offset*7+d);val v=DoubleArray(9);rs.forEach{r->val n=sums(r);n.indices.forEach{i->v[i]+=n[i]}};Card(Modifier.fillMaxWidth(),onClick={selected=date;tab=0}){Column(Modifier.padding(12.dp)){Text("$date",fontWeight=FontWeight.Bold);Text("${v[0].roundToInt()} kcal · Protein ${fmt(v[1])} g · KH ${fmt(v[2])} g · Fett ${fmt(v[3])} g");Text(rs.joinToString(" · "){it.title},style=MaterialTheme.typography.bodySmall);Text("Antippen für Zutaten und Mikronährstoffe",style=MaterialTheme.typography.labelSmall)}}}
+ item{Text("Nährwerte sind Richtwerte pro 100 g aus einer eingebauten Beispieltabelle, keine verifizierte Lebensmitteldatenbank. Marken, Zubereitung und Bioverfügbarkeit verändern die Werte. Die Tabelle deckt nur ausgewählte Mikronährstoffe ab.",style=MaterialTheme.typography.bodySmall)}
+ }
+ else->{
+ item{Text("Dein Profil",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)}
+ item{Text("45 Jahre · 179 cm · Start 77,5 kg · Ziel 74 kg · 5 Trainingstage · TRX, Klimmzugstange, Bänder, Matte, WaterRower, Joggen")}
+ item{OutlinedTextField(value=weight,onValueChange={weight=it},label={Text("Aktuelles Gewicht (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true)}
+ item{Button(onClick={prefs.edit().putString("weight",weight).apply()}){Text("Gewicht speichern")}}
+ item{Text("Ernährungsorientierung: ca. 150 g Protein/Tag. Der Kalorienbedarf ist eine Schätzung; für ein individuelles Ziel sind Alltagsbewegung und Gewichtsverlauf erforderlich.")}
+ item{Text("12-Wochen-Block beginnt: $startDate")}
+ item{OutlinedButton(onClick={start=mondayNow().toString();prefs.edit().putString("start",start).apply();offset=0;selected=null}){Text("12-Wochen-Block ab dieser Woche neu starten")}}
+ item{Text("Hinweis: Neustart ändert den Planbeginn; bereits gesetzte Häkchen bleiben datumsbezogen gespeichert.",style=MaterialTheme.typography.bodySmall)}
+ }
  }
  }
  }
 }
+@Composable private fun WorkoutCard(w:Workout,done:Boolean,onDone:()->Unit){Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(w.title,fontWeight=FontWeight.Bold);Text("${w.duration} Minuten · ${w.detail}");w.moves.forEach{m->Text("• ${m.name}: ${m.sets} × ${m.reps}; Pause ${m.rest} s");Text(m.cue,style=MaterialTheme.typography.bodySmall)};Row{Checkbox(checked=done,onCheckedChange={onDone()});Text("Training durchgeführt",modifier=Modifier.padding(top=12.dp))}}}}
+@Composable private fun RecipeCard(r:Recipe,eaten:Boolean,onEaten:()->Unit,expanded:Boolean,onExpand:()->Unit){val n=sums(r);Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(r.title,fontWeight=FontWeight.Bold);Text("${r.minutes} Min. aktiv · ${n[0].roundToInt()} kcal · Protein ${fmt(n[1])} g · KH ${fmt(n[2])} g · Fett ${fmt(n[3])} g");TextButton(onClick=onExpand){Text(if(expanded)"Details schließen" else "Zutaten, Zubereitung & Mikronährstoffe")};if(expanded){r.ingredients.forEach{Text("• ${it.name}: ${it.grams} g")};Text("Zubereitung: ${r.directions}");Text("Ballaststoffe ${fmt(n[4])} g · Calcium ${fmt(n[5])} mg · Magnesium ${fmt(n[6])} mg · Eisen ${fmt(n[7])} mg · Vitamin C ${fmt(n[8])} mg")};Row{Checkbox(checked=eaten,onCheckedChange={onEaten()});Text("Mahlzeit gegessen",modifier=Modifier.padding(top=12.dp))}}}}
